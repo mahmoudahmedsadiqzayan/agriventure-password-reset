@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101a32">
+<title>AGRIVENTOUR | تغيير البريد الإلكتروني</title>
+<style>
+:root{color-scheme:dark;--bg:#101827;--panel:#1e2b40;--text:#f8fafc;--muted:#c6d0df;--blue:#2864e8;--bad:#ffaaaa;--good:#9ce8bb}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;}
+body{min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);font-family:"Noto Naskh Arabic",Tahoma,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;}
+.wrap{width:min(100%,624px)}
+.card{width:100%;background:var(--panel);border:0;border-radius:30px;padding:76px 45px 74px;box-shadow:none}
+h1{font-size:clamp(30px,5.6vw,42px);font-weight:700;text-align:center;line-height:1.45;margin:0 0 48px;color:#fff}
+.description{font-size:clamp(20px,3.8vw,28px);line-height:1.75;text-align:right;color:var(--muted);margin:0 0 50px}
+.current{font-size:clamp(15px,2.8vw,19px);line-height:1.6;color:#aebbd0;margin:-30px 0 26px;overflow-wrap:anywhere}
+.field{margin:0 0 22px}
+.field label{display:none}
+.field input{display:block;width:100%;height:82px;padding:14px 22px;border:1px solid #d4d8e0;border-radius:14px;background:#fff;color:#202634;font:clamp(18px,3.3vw,26px) Tahoma,Arial,sans-serif;outline:none;direction:ltr;text-align:right;box-shadow:0 1px 2px #0001}
+.field input::placeholder{color:#8b8b8b;opacity:1;text-align:right}
+.field input:focus{border-color:#7fa6ff;box-shadow:0 0 0 3px #2864e82a}
+.field input[readonly]{background:#f4f6f9;color:#4b5563}
+.btn{width:100%;height:96px;border:0;border-radius:15px;background:var(--blue);color:#fff;font:clamp(19px,3.5vw,27px) Tahoma,Arial,sans-serif;cursor:pointer;margin-top:0}
+.btn:disabled{opacity:.65;cursor:wait}
+.msg{font-size:16px;line-height:1.8;margin-top:20px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.ok{color:var(--good)}.msg.err{color:var(--bad)}
+@media(max-width:480px){body{padding:22px}.wrap{width:100%}.card{padding:48px 24px 42px;border-radius:26px}h1{margin-bottom:32px}.description{margin-bottom:32px}.current{margin-top:-18px;margin-bottom:22px}.field{margin-bottom:16px}.field input{height:66px;border-radius:12px;padding:12px 16px}.btn{height:74px;border-radius:12px}}
+@media(max-height:760px){body{align-items:flex-start}.card{margin:auto 0}}
+</style></head><body><main class="wrap"><section class="card" aria-labelledby="pageTitle"><h1 id="pageTitle">تغيير البريد الإلكتروني</h1><p class="description">اكتب البريد الإلكتروني الجديد لحسابك في<br> AGRIVENTOUR.</p><p class="current" id="currentEmailText"></p><form id="emailForm" novalidate><div class="field"><label for="newEmail">البريد الإلكتروني الجديد</label><input id="newEmail" type="email" autocomplete="email" inputmode="email" required placeholder="البريد الإلكتروني الجديد" aria-label="البريد الإلكتروني الجديد"></div><div class="field"><label for="confirmEmail">تأكيد البريد الإلكتروني الجديد</label><input id="confirmEmail" type="email" autocomplete="email" inputmode="email" required placeholder="تأكيد البريد الإلكتروني الجديد" aria-label="تأكيد البريد الإلكتروني الجديد"></div><div class="field"><label for="currentPassword">كلمة المرور الحالية</label><input id="currentPassword" type="password" autocomplete="current-password" required placeholder="كلمة المرور الحالية" aria-label="كلمة المرور الحالية"></div><button class="btn" id="submitBtn" type="submit">تغيير البريد الإلكتروني</button><div class="msg" id="message" role="status" aria-live="polite"></div></form></section></main>
+<script>
+'use strict';
+const SUPABASE_URL='https://eaorwzdjcufhvrxezgpf.supabase.co';
+const API_KEY='sb_publishable_xpIjzn9-dE5tbSsWKE3m5w_W73xWKSN';
+const ENDPOINT=SUPABASE_URL+'/functions/v1/agriventure-account';
+const $=id=>document.getElementById(id);
+function readLocal(key){try{return JSON.parse(localStorage.getItem(key)||'null')||{}}catch{return {}}}
+function getToken(){const s=readLocal('agriventure_session');return s.access_token||s.accessToken||s.token||''}
+function show(text,type=''){const m=$('message');m.textContent=text;m.className='msg'+(type?' '+type:'')}
+function getEmail(){const u=readLocal('agriventure_user');return u.email||u.email_address||''}
+(function init(){const token=getToken(),email=getEmail();$('currentEmailText').textContent=email?'البريد الحالي: '+email:'';if(!token){show('جلسة الدخول غير موجودة على هذا النطاق. افتح الصفحة من داخل AGRIVENTOUR بعد تسجيل الدخول.','err');$('submitBtn').disabled=true;}})();
+$('emailForm').addEventListener('submit',async e=>{e.preventDefault();const token=getToken(),newEmail=$('newEmail').value.trim().toLowerCase(),confirmEmail=$('confirmEmail').value.trim().toLowerCase(),currentPassword=$('currentPassword').value;
+ if(!token){show('جلسة الدخول غير موجودة أو انتهت. سجّل الدخول من جديد.','err');return}
+ if(!/^\S+@\S+\.\S+$/.test(newEmail)){show('أدخل بريدًا إلكترونيًا صحيحًا.','err');$('newEmail').focus();return}
+ if(newEmail!==confirmEmail){show('البريدان الإلكترونيان غير متطابقين.','err');$('confirmEmail').focus();return}
+ if(newEmail===getEmail().trim().toLowerCase()){show('البريد الجديد مطابق للبريد الحالي.','err');return}
+ if(!currentPassword){show('أدخل كلمة المرور الحالية للتأكيد.','err');$('currentPassword').focus();return}
+ const btn=$('submitBtn');btn.disabled=true;show('جارٍ إرسال طلب تغيير البريد…');
+ try{const res=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':API_KEY,'Authorization':'Bearer '+token},body:JSON.stringify({action:'email',newEmail,currentPassword})});let data={};try{data=await res.json()}catch{}
+ if(!res.ok||data.success!==true)throw new Error(data.error||data.message||'تعذر تنفيذ الطلب على الخادم.');
+ show('تم إرسال طلب تغيير البريد بنجاح. افتح بريدك واتبع تعليمات التأكيد إذا وصلتك رسالة. قد يظل البريد الحالي فعالًا حتى اكتمال التأكيد.','ok');$('newEmail').value='';$('confirmEmail').value='';$('currentPassword').value='';
+ }catch(err){show(err.message||'حدث خطأ أثناء إرسال الطلب.','err');btn.disabled=false;}
+});
+</script></body></html>
