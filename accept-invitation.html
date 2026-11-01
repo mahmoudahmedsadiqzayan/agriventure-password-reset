@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <title>تفعيل الدعوة - AGRIVENTOUR</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #101827;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+    main {
+      width: min(88%, 380px);
+      padding: 25px;
+      border-radius: 16px;
+      background: #1d293b;
+      box-sizing: border-box;
+    }
+    h2 { text-align: center; }
+    .brand { text-align:center; font-family: Georgia,serif; font-style:italic; font-size:clamp(25px,6vw,34px); color:#f8fafc; letter-spacing:.2px; margin-bottom:8px }
+    p { color: #cbd5e1; line-height: 1.7; }
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 13px;
+      margin-top: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    input {
+      border: 1px solid #64748b;
+      background: #fff;
+      color: #111;
+    }
+    button {
+      border: 0;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: wait; }
+    #message { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">AgriVentures</div><h2 id="pageTitle">تفعيل الدعوة</h2>
+  <p id="pageDescription">
+    أكمل إعداد حسابك للانضمام إلى شركة AGRIVENTOUR.
+  </p>
+
+  <form id="form" hidden>
+    <input id="email" type="email" autocomplete="email" placeholder="البريد الإلكتروني" readonly>
+    <input id="username" type="text" autocomplete="username"
+      placeholder="اسم المستخدم (3 إلى 32 حرفًا/رقمًا)" minlength="3" maxlength="32"
+      pattern="[A-Za-z0-9_.-]{3,32}" required>
+
+    <input id="password" type="password"
+      placeholder="كلمة المرور الجديدة"
+      minlength="8" autocomplete="new-password" required>
+
+    <input id="confirm" type="password"
+      placeholder="تأكيد كلمة المرور"
+      minlength="8" autocomplete="new-password" required>
+
+    <button id="save" type="submit">حفظ كلمة المرور</button>
+  </form>
+
+  <p id="message" role="status" aria-live="polite"></p>
+</main>
+
+<script type="module">
+  import { createClient } from
+    "https://esm.sh/@supabase/supabase-js@2";
+
+  const SUPABASE_URL =
+    "https://eaorwzdjcufhvrxezgpf.supabase.co";
+
+  const SUPABASE_PUBLIC_KEY =
+    "sb_publishable_xpIjzn9-dE5tbSsWKE3m5w_W73xWKSN";
+
+  const $ = (id) => document.getElementById(id);
+  const message = $("message");
+  const form = $("form");
+  const save = $("save");
+
+  const supabase = createClient(
+    SUPABASE_URL,
+    SUPABASE_PUBLIC_KEY
+  );
+
+  const query = new URLSearchParams(location.search);
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const flowType = (query.get("type") || hash.get("type") || "").toLowerCase();
+  const mode = "invite";
+
+  function show(text, kind = "") {
+    message.textContent = text;
+    message.style.color = kind === "error" ? "#fca5a5" : kind === "success" ? "#86efac" : "#cbd5e1";
+  }
+
+  function setMode() {
+    document.title = "تفعيل الدعوة - AGRIVENTOUR";
+    $("pageTitle").textContent = "تفعيل الدعوة";
+    $("pageDescription").textContent = "راجع بريدك الإلكتروني، واختر اسم مستخدم وكلمة مرور لحسابك.";
+    save.textContent = "تفعيل الحساب";
+    $("username").hidden = false;
+    $("username").required = true;
+  }
+
+  async function initialize() {
+    setMode();
+
+    try {
+      // Exchange the one-time PKCE code returned by Supabase email links.
+      const code = query.get("code");
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
+      } else {
+        const tokenHash = query.get("token_hash") || hash.get("token_hash");
+        if (tokenHash) {
+          const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" });
+          if (verifyError) throw verifyError;
+        }
+      }
+
+      const {
+        data: { session },
+        error
+      } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      if (mode === "email") {
+        form.hidden = true;
+
+        if (session?.user) {
+          show(
+            "تم التحقق من رابط تغيير البريد. إذا طلبت Supabase تأكيدًا إضافيًا، راجع بريدك الإلكتروني واتبع التعليمات.",
+            "success"
+          );
+        } else {
+          show(
+            "لم يتم العثور على جلسة صالحة. افتح رابط تأكيد البريد الذي وصلك، وتأكد من عدم انتهاء صلاحيته.",
+            "error"
+          );
+        }
+        return;
+      }
+
+      if (!session?.access_token) {
+        form.hidden = true;
+        show(
+          "الرابط غير صالح أو انتهت صلاحيته. اطلب رابط دعوة جديدًا أو رابط استعادة جديدًا ثم افتحه من البريد.",
+          "error"
+        );
+        return;
+      }
+
+      form.hidden = false;
+      $("email").value = session.user.email || "";
+      if (!$("email").value) throw new Error("تعذر قراءة البريد المرتبط بالدعوة. افتح أحدث رابط دعوة.");
+      show("تم التحقق من الدعوة. أدخل اسم المستخدم وكلمة المرور لإكمال تفعيل الحساب.");
+
+    } catch (error) {
+      form.hidden = true;
+      show(
+        error?.message ||
+        "تعذر التحقق من الرابط. اطلب رابطًا جديدًا وحاول مرة أخرى.",
+        "error"
+      );
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const password = $("password").value;
+    const confirm = $("confirm").value;
+    const username = $("username").value.trim();
+
+    if (mode === "invite" && !/^[A-Za-z0-9_.-]{3,40}$/.test(username)) {
+      show("اسم المستخدم لازم يكون من 3 إلى 40 حرفًا/رقمًا، ويسمح بـ . _ - فقط.", "error");
+      $("username").focus();
+      return;
+    }
+
+    if (password.length < 8) {
+      show(
+        "كلمة المرور لازم تكون 8 أحرف على الأقل.",
+        "error"
+      );
+      return;
+    }
+
+    if (password !== confirm) {
+      show("كلمتا المرور غير متطابقتين.", "error");
+      return;
+    }
+
+    save.disabled = true;
+    show("جارٍ تحديث كلمة المرور...");
+
+    try {
+      if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) {
+        show("اسم المستخدم لازم يكون من 3 إلى 32 حرفًا/رقمًا، ويسمح بـ . _ - فقط.", "error");
+        return;
+      }
+      const { data, error } = await supabase.auth.updateUser({ password, data: { username } });
+      if (error) throw error;
+      if (!data?.user) throw new Error("لم يتم تأكيد تحديث الحساب.");
+      const { data: profileResult, error: profileError } = await supabase.functions.invoke("agriventure-account", {
+        body: { action: "username", newUsername: username }
+      });
+      if (profileError) throw profileError;
+      if (profileResult?.error) throw new Error(profileResult.error);
+      show("تم تفعيل الحساب وحفظ اسم المستخدم. يمكنك الآن تسجيل الدخول إلى AGRIVENTOUR.", "success");
+
+      form.reset();
+      form.hidden = true;
+
+    } catch (error) {
+      show(
+        error?.message ||
+        "تعذر تحديث كلمة المرور. افتح رابط الدعوة أو الاستعادة من جديد.",
+        "error"
+      );
+    } finally {
+      save.disabled = false;
+    }
+  });
+
+  initialize();
+</script>
+</body>
+</html>
