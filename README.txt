@@ -1,0 +1,1 @@
+Updated pages: invitation activation, password reset, email-change confirmation. The old embedded logo and separately typeset tagline were replaced by the supplied transparent logo image embedded directly in each HTML file. Other page logic was preserved.
