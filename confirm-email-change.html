@@ -18,18 +18,62 @@ const ACCOUNT_FUNCTION=`${SUPABASE_URL}/functions/v1/agriventure-account`;
 const supabase=createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const $=id=>document.getElementById(id);
 function show(text,kind=""){$("message").textContent=text;$("message").className=kind;}
-const params=new URLSearchParams(location.search);
+const query=new URLSearchParams(location.search);
+const fragment=new URLSearchParams(location.hash.startsWith("#")?location.hash.slice(1):location.hash);
+const params=new URLSearchParams([...query.entries(),...fragment.entries()]);
 const tokenHash=params.get("token_hash")||params.get("tokenHash")||"";
 const type=(params.get("type")||"").toLowerCase();
 const email=(params.get("email")||"").trim().toLowerCase();
-if(type!=="email_change"||!tokenHash||!email){
-  $("description").textContent="رابط التأكيد غير مكتمل أو غير صالح. اطلب رسالة تغيير بريد جديدة وافتح أحدث رابط وصل إليك.";
-  $("confirmForm").hidden=true;
-  show("تعذر قراءة بيانات رابط التأكيد.","err");
-}else{
-  // لا نستهلك token_hash عند فتح الصفحة؛ نخفيه من شريط العنوان ونحتفظ به في الذاكرة فقط.
-  history.replaceState({},document.title,location.pathname);
+const callbackMessage=params.get("message")||"";
+
+// Supabase may complete the verification before redirecting back to this page.
+// In that case the callback can contain session tokens in the URL fragment instead of token_hash.
+async function handleSupabaseCallback(){
+  const accessToken=params.get("access_token")||"";
+  const refreshToken=params.get("refresh_token")||"";
+  if(type==="email_change" && accessToken && refreshToken){
+    try{
+      const {data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
+      if(error||!data?.user) throw error||new Error("تعذر التحقق من نتيجة التأكيد.");
+      const verifiedEmail=(data.user.email||"").trim();
+      $("description").textContent="تمت معالجة رابط التأكيد بواسطة Supabase.";
+      $("confirmForm").hidden=true;
+      show(verifiedEmail?`تمت معالجة التأكيد. البريد المرتبط بالحساب حاليًا: ${verifiedEmail}`:"تمت معالجة رابط التأكيد. راجع البريد المرتبط بالحساب من إعدادات الحساب.","ok");
+      history.replaceState({},document.title,location.pathname);
+      return true;
+    }catch(error){
+      $("confirmForm").hidden=true;
+      show("وصل رابط التأكيد، لكن تعذر التحقق من نتيجته تلقائيًا. ارجع إلى الحساب وتحقق من البريد المسجل، ولا تستخدم الرابط نفسه مرة أخرى.","err");
+      console.error("EMAIL_CHANGE_CALLBACK_SESSION_FAILED",error);
+      return true;
+    }
+  }
+  if(callbackMessage){
+    $("confirmForm").hidden=true;
+    if(/other email|another email/i.test(callbackMessage)){
+      $("description").textContent="Supabase أفاد بأن خطوة التأكيد قُبلت، لكنه ما زال ينتظر تأكيدًا آخر.";
+      show("الرسالة الواردة من Supabase تشير إلى أن تأكيد البريد الآخر ما زال مطلوبًا. إذا كنت عطّلت Secure email change بالفعل، تأكد من الضغط على Save changes ثم ابدأ طلب تغيير جديد؛ تغيير الإعداد لا يلغي طلبًا سابقًا.","err");
+    }else{
+      $("description").textContent="أعاد Supabase رسالة بعد معالجة رابط التأكيد.";
+      show(callbackMessage,"err");
+    }
+    history.replaceState({},document.title,location.pathname);
+    return true;
+  }
+  return false;
 }
+
+const callbackHandled=await handleSupabaseCallback();
+if(!callbackHandled){
+  if(type!=="email_change"||!tokenHash||!email){
+    $("description").textContent="رابط التأكيد غير مكتمل أو غير صالح. افتح أحدث رابط في رسالة تغيير البريد، وتأكد أن إعدادات Supabase محفوظة.";
+    $("confirmForm").hidden=true;
+    show("تعذر قراءة بيانات رابط التأكيد. الرابط الحالي لا يحتوي على token_hash صالح أو بيانات جلسة تأكيد.","err");
+  }else{
+    history.replaceState({},document.title,location.pathname);
+  }
+}
+
 $("confirmForm").addEventListener("submit",async event=>{
   event.preventDefault();
   const password=$("currentPassword").value;
@@ -38,19 +82,18 @@ $("confirmForm").addEventListener("submit",async event=>{
   if(!password){show("اكتب كلمة المرور الحالية أولًا.","err");return;}
   button.disabled=true;button.textContent="جارٍ التحقق...";show("");
   try{
-    // نتحقق من كلمة المرور أولًا؛ لا نستهلك رابط التأكيد إذا كانت خاطئة.
     const {data:loginData,error:loginError}=await supabase.auth.signInWithPassword({email,password});
-    if(loginError||!loginData?.session?.access_token||!loginData?.user?.id){throw new Error("كلمة المرور الحالية غير صحيحة، أو تعذر التحقق من الحساب.");}
+    if(loginError||!loginData?.session?.access_token||!loginData?.user?.id) throw new Error("كلمة المرور الحالية غير صحيحة، أو تعذر التحقق من الحساب.");
     const response=await fetch(ACCOUNT_FUNCTION,{
       method:"POST",
       headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${loginData.session.access_token}`},
       body:JSON.stringify({action:"confirm_email_change",currentPassword:password,tokenHash})
     });
     const result=await response.json().catch(()=>({}));
-    if(!response.ok||!result.success){throw new Error(result.error||"تعذر تأكيد تغيير البريد الإلكتروني.");}
+    if(!response.ok||!result.success) throw new Error(result.error||"تعذر تأكيد تغيير البريد الإلكتروني.");
     $("description").textContent="تم تأكيد تغيير البريد الإلكتروني بنجاح.";
     $("confirmForm").hidden=true;
-    show("تم التحقق من كلمة المرور واعتماد تأكيد البريد الإلكتروني. يمكنك الرجوع إلى AGRIVENTOUR وتسجيل الدخول بالبريد المعتمد.","ok");
+    show("تم التحقق من كلمة المرور واعتماد تأكيد البريد الإلكتروني. يمكنك الرجوع إلى AGRIVENTOUR والتحقق من البريد المسجل.","ok");
     history.replaceState({},document.title,location.pathname);
   }catch(error){show(error?.message||"حدث خطأ أثناء التأكيد. جرّب مرة أخرى باستخدام أحدث رسالة وصلتك.","err");}
   finally{button.disabled=false;button.textContent="تأكيد تغيير البريد الإلكتروني";}
